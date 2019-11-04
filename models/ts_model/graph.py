@@ -103,15 +103,47 @@ class TsGraph:
              for o in range(self.flags.eval_batch_size)], axis=0)
         self.shared_tensors['src_bias'] = src_bias
 
-        batch_go = self.shared_tensors['batch_go']
-        batch_go = tf.concat(
-            [tf.tile(tf.expand_dims(batch_go[o, :], axis=0),
-                     [self.flags.beam_search_size, 1])
+        src_bias = self.shared_tensors['src_bias']
+        src_bias = tf.concat(
+            [tf.tile(tf.expand_dims(src_bias[o, :, :, :], axis=0),
+                     [self.flags.beam_search_size, 1, 1, 1])
              for o in range(self.flags.eval_batch_size)], axis=0)
-        self.shared_tensors['batch_go'] = batch_go
+        self.shared_tensors['src_bias'] = src_bias
+
+        if 'control_outputs' in self.shared_tensors:
+            control_outputs = self.shared_tensors['control_outputs']
+            control_outputs = tf.concat(
+                [tf.tile(tf.expand_dims(control_outputs[o, :, :], axis=0),
+                         [self.flags.beam_search_size, 1, 1])
+                 for o in range(self.flags.eval_batch_size)], axis=0)
+            self.shared_tensors['control_outputs'] = control_outputs
+
+    def update_decoder_embedding(
+            self, embedding, score):
+        if self.flags.beam_search_size > 1 and not self.is_training:
+            score = tf.tile(score, [1, self.flags.beam_search_size, 1])
+            score = tf.reshape(score, [-1, 1, self.flags.dimension])
+
+        embedding_start = tf.slice(embedding, [0, 0, 0], [-1, 1, -1])
+        embedding_start *= tf.expand_dims(score,  axis=1)
+        embedding_rest = tf.slice(embedding, [0, 1, 0], [-1, -1, -1])
+        output_embedding = tf.concat([embedding_start, embedding_rest], axis=1)
+        print('Update embedding for decoder.')
+
+        return output_embedding
 
     def decode_srcs_to_trgs(self, trg_emb):
         trg_emb = common_attention.add_timing_signal_1d(trg_emb)
+        if 'control_vec' in self.shared_tensors:
+            control_vec = self.shared_tensors['control_vec']
+            trg_emb = self.update_decoder_embedding(
+                trg_emb, control_vec)
+
+        control_outputs, control_bias = None, None
+        if 'control_outputs' in self.shared_tensors:
+            control_outputs = self.shared_tensors['control_outputs']
+            control_bias = self.shared_tensors['control_bias']
+
         trg_length = tf.shape(trg_emb)[1]
         if 'gpt2' in self.flags.model_mode:
             trg_outputs = model.gpt2_decoder(
@@ -127,6 +159,8 @@ class TsGraph:
                 encoder_output=self.shared_tensors['src_outputs'],
                 encoder_decoder_attention_bias=self.shared_tensors['src_bias'],
                 hparams=self.hparams,
+                external_output=control_outputs,
+                external_bias=control_bias,
                 name='trg_decoder')
         else:
             raise ValueError('model_mode not known')
@@ -155,6 +189,24 @@ class TsGraph:
             else:
                 raise ValueError('model_mode not known.')
             self.shared_tensors['src_outputs'] = src_outputs
+
+            if 'control_ids' in features:
+                control_ids = features['control_ids']
+                control_mask = tf.cast(
+                    tf.equal(control_ids, self.data.vocab.pad_id), tf.float32)
+                control_bias = common_attention.attention_bias_ignore_padding(control_mask)
+                control_embs = self._embedding_fn(control_ids)
+                if 'gpt2' in self.flags.model_mode:
+                    control_outputs = model.gpt2_encoder(
+                        self.hparams, control_embs, encoder_bias=control_bias)
+                elif 't2t' in self.flags.model_mode:
+                    control_outputs = transformer.transformer_encoder(
+                        control_embs, control_bias, self.hparams, name='control_encoder')
+                else:
+                    raise ValueError('model_mode not known.')
+                self.shared_tensors['control_vec'] = features['control_vec']
+                self.shared_tensors['control_outputs'] = control_outputs
+                self.shared_tensors['control_bias'] = control_bias
 
         batch_go = tf.tile(
             tf.expand_dims(

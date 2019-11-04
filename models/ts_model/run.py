@@ -12,15 +12,15 @@ from nltk.translate.bleu_score import sentence_bleu
 flags = tf.flags
 
 flags.DEFINE_string(
-    "name", "d6",
+    "name", "d9",
     "Name of experiment")
 
 flags.DEFINE_string(
-    "mode", "train",
+    "mode", "infer",
     "choice of train/infer")
 
 flags.DEFINE_string(
-    "model_mode", "gpt2_vocab:gpt2",
+    "model_mode", "bert_vocab:t2t",
     "mode of model, e.g. gpt2:t2t:bert")
 
 flags.DEFINE_string(
@@ -33,7 +33,7 @@ flags.DEFINE_string(
 
 flags.DEFINE_string(
     "train_tfexample",
-    "/Users/sanqiang/git/ts/ts_2020_data/wikilarge/test/*.example",
+    "/Users/sanqiang/git/ts/ts_2020_data/examples/*.example",
     "The path pattern of train tf.Example files.")
 
 flags.DEFINE_integer(
@@ -68,6 +68,24 @@ flags.DEFINE_integer(
     "beam_search_size", 1,
     "The size of beam search."
 )
+
+# For control
+flags.DEFINE_string(
+    "control_mode", "length:syntax:split:ppdb",
+    "choice of :")
+
+flags.DEFINE_integer(
+    "max_ppdb_len", 30,
+    "Maximum length of sentence."
+)
+
+flags.DEFINE_string(
+    "ppdb_file", "/Users/sanqiang/git/ts/ts_2020_data/ppdb.txt",
+    "The file path of ppdb")
+
+flags.DEFINE_string(
+    "ppdb_vocab", "/Users/sanqiang/git/ts/ts_2020_data/vocab",
+    "The file path of ppdb vocab generated from train")
 
 # For t2t
 flags.DEFINE_integer(
@@ -121,7 +139,7 @@ flags.DEFINE_integer(
 
 flags.DEFINE_string(
     "infer_tfexample",
-    "/Users/Shared/Previously Relocated Items/Security/zfs1/hdaqing/saz31/dataset/tmp_wikilarge/eval.tfexample",
+    "/Users/sanqiang/git/ts/ts_2020_data/examples/shard_wikilarge_2.example",
     "The path pattern of train tf.Example files.")
 
 flags.DEFINE_string(
@@ -333,6 +351,7 @@ def main(_):
     tf.logging.set_verbosity(tf.logging.INFO)
 
     FLAGS.model_mode = FLAGS.model_mode.split(':')
+    FLAGS.control_mode = FLAGS.control_mode.split(':')
 
     data = Data(FLAGS)
 
@@ -357,8 +376,10 @@ def main(_):
     tf.logging.info(tf.app.flags.FLAGS.flag_values_dict())
 
     if FLAGS.mode == 'train':
+        data.update_data_for_train()
         train(data, estimator)
     elif FLAGS.mode == 'infer':
+        data.update_data_for_eval()
         repeat_infer(
             data, estimator, log_dir, model_dir, result_dir)
 

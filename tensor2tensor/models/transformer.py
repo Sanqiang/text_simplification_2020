@@ -1261,7 +1261,8 @@ def transformer_decoder(decoder_input,
                         losses=None,
                         hist_vector=None,
                         npad_mode=None,
-                        direct_mode=None):
+                        external_output=None,
+                        external_bias=None):
   """A stack of transformer layers.
 
   Args:
@@ -1346,6 +1347,30 @@ def transformer_decoder(decoder_input,
                     max_length=hparams.get("max_length"),
                     vars_3d=hparams.get("attention_variables_3d"))
                 x = common_layers.layer_postprocess(x, y, hparams)
+
+        if external_output is not None:
+          with tf.variable_scope("external_attention"):
+            y = common_attention.multihead_attention(
+                  common_layers.layer_preprocess(x, hparams),
+                  external_output,
+                  external_bias,
+                  hparams.attention_key_channels or hparams.hidden_size,
+                  hparams.attention_value_channels or hparams.hidden_size,
+                  hparams.hidden_size,
+                  hparams.num_heads,
+                  hparams.attention_dropout,
+                  max_relative_position=hparams.max_relative_position,
+                  heads_share_relative_embedding=(
+                    hparams.heads_share_relative_embedding),
+                  add_relative_to_values=hparams.add_relative_to_values,
+                  save_weights_to=save_weights_to,
+                  cache=layer_cache,
+                  make_image_summary=make_image_summary,
+                  dropout_broadcast_dims=attention_dropout_broadcast_dims,
+                  max_length=hparams.get("max_length"),
+                  vars_3d=hparams.get("attention_variables_3d"))
+            x = common_layers.layer_postprocess(x, y, hparams)
+
         if encoder_output is not None:
           with tf.variable_scope("encdec_attention"):
             y = common_attention.multihead_attention(

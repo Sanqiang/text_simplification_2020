@@ -3,6 +3,7 @@ import numpy as np
 import tensorflow as tf
 from language_model.gpt2 import encoder
 from language_model.bert import tokenization
+from models.utils.control_utils import ControlMethod
 
 
 def _clean_sent_ids(ids, eos_id):
@@ -27,7 +28,7 @@ class BertVocab:
         self.SYMBOL_GO = '[CLS]'
         self.SYMBOL_EOS = '[SEP]'
         self.SYMBOL_PAD = '[PAD]'
-        self.more_tokens  = []
+        self.more_tokens = []
         self.tokenizer = tokenization.FullTokenizer(
             vocab_file=vocab_file, do_lower_case=True)
         self.pad_id = self.tokenizer.vocab[self.SYMBOL_PAD]
@@ -94,36 +95,74 @@ class Data:
             'src_wds': tf.FixedLenFeature([], tf.string),
             'trg_wds': tf.FixedLenFeature([], tf.string),
         }
+
         if 'gpt2_vocab' in self.flags.model_mode:
             self.vocab = GPT2Vocab(flags.models_dir, flags.model_name)
         elif 'bert_vocab' in self.flags.model_mode:
             self.vocab = BertVocab(flags.bert_vocab_file)
 
-    def _parse(self, features):
-        def _py_process_line_pair(src_wds, trg_wds):
+    def update_data_for_train(self):
+        if self.flags.control_mode:
+            self.feature_set.update(
+                {'control_wds': tf.FixedLenFeature([], tf.string),
+                 'control_vec': tf.FixedLenFeature([4], tf.float32)})
+
+    def update_data_for_eval(self):
+        if self.flags.control_mode:
+            self.control_obj = ControlMethod(self.flags)
+
+    def _parse(self, features, is_training):
+        def _py_process_line_pair(src_wds, trg_wds, control_wds, control_vec):
             src_wds, trg_wds = src_wds.decode(), trg_wds.decode()
-            # print('src_wds:%s' % src_wds)
-            # print('trg_wds:%s' % trg_wds)
-            # print('=====')
+
+            if self.flags.control_mode and not is_training:
+                control_vec, control_wds = self.control_obj.get_control_vec_eval(
+                    src_wds)
+
+            output_control_vec = []
+            while len(output_control_vec) <= self.flags.dimension:
+                output_control_vec.extend(control_vec)
+            control_vec = output_control_vec[:self.flags.dimension]
+
+            control_ids = _pad_sent(
+                self.vocab.encode_sent(control_wds),
+                self.vocab.pad_id, self.vocab.eos_id, self.flags.max_ppdb_len)
+
             src_ids, trg_ids = (
                 _pad_sent(self.vocab.encode_sent(src_wds),
                           self.vocab.pad_id, self.vocab.eos_id, self.flags.max_src_len),
                 _pad_sent(self.vocab.encode_sent(trg_wds),
                           self.vocab.pad_id, self.vocab.eos_id, self.flags.max_trg_len))
-            return np.array(src_ids, np.int32), np.array(trg_ids, np.int32)
+            return (np.array(src_ids, np.int32),
+                    np.array(trg_ids, np.int32),
+                    np.array(control_ids, np.int32),
+                    np.array(control_vec, np.float32))
 
         src_wds, trg_wds = features['src_wds'], features['trg_wds']
-        src_ids, trg_ids = tf.py_func(
+        if is_training and self.flags.control_mode:
+            control_wds = features['control_wds']
+            control_vec = features['control_vec']
+        else:
+            # Just placeholder
+            control_wds = src_wds
+            control_vec = tf.zeros([1,])
+        src_ids, trg_ids, control_ids, control_vec = tf.py_func(
             _py_process_line_pair,
-            [src_wds, trg_wds],
-            [tf.int32, tf.int32])
+            [src_wds, trg_wds, control_wds, control_vec],
+            [tf.int32, tf.int32, tf.int32, tf.float32])
         src_ids.set_shape(
             [self.flags.max_src_len])
         trg_ids.set_shape(
             [self.flags.max_trg_len])
+        control_ids.set_shape(
+            [self.flags.max_ppdb_len])
+        control_vec.set_shape(
+            [self.flags.dimension])
         output = {
             'src_ids': src_ids,
             'trg_ids': trg_ids,
+            'control_ids': control_ids,
+            'control_vec': control_vec
         }
         return output
 
@@ -132,7 +171,9 @@ class Data:
         def input_fn(params):
             batch_size = params['batch_size']
             if is_training:
-                files = tf.gfile.Glob(input_files)
+                files = []
+                for input_pattern in input_files.split(','):
+                    files.extend(tf.gfile.Glob(input_pattern))
                 tf.logging.info('Input files: %s' % files)
                 d = tf.data.Dataset.from_tensor_slices(tf.constant(files))
                 d = d.repeat()
@@ -149,7 +190,7 @@ class Data:
 
             d = d.apply(
                 tf.data.experimental.map_and_batch(
-                    lambda record:  self._parse(tf.parse_single_example(record, self.feature_set)),
+                    lambda record:  self._parse(tf.parse_single_example(record, self.feature_set), is_training),
                     batch_size=batch_size,
                     num_parallel_batches=num_cpu_threads,
                     drop_remainder=is_training))

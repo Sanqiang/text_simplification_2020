@@ -3,11 +3,11 @@
 #SBATCH --cluster=gpu
 #SBATCH --gres=gpu:1
 #SBATCH --partition=titanx
-#SBATCH --job-name=t2t_eval_large
-#SBATCH --output=t2t_eval_large.out
+#SBATCH --job-name=t2t_eval_comb_large
+#SBATCH --output=t2t_eval_comb_large.out
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=1
-#SBATCH --time=1-00:00:00
+#SBATCH --time=3-00:00:00
 #SBATCH --qos=long
 
 
@@ -17,7 +17,7 @@ export PYTHONPATH="${PYTHONPATH}:/ihome/hdaqing/saz31/ts_2020"
 
 # Run the job
 srun python ../ts_model/run.py \
-    --name plain_large \
+    --name plain_comb_large \
     --mode infer \
     --num_cpu 5 \
     --model_mode t2t:bert_vocab \
