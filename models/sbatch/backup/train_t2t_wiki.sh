@@ -31,4 +31,7 @@ srun python ../ts_model/run.py \
     --beam_search_size 1 \
     --lr 0.1 \
     --num_ref 8 \
-    --bert_vocab_file /ihome/hdaqing/saz31/ts_2020/language_model/bert/uncased_L-12_H-768_A-12/vocab.txt
+    --bert_vocab_file /ihome/hdaqing/saz31/ts_2020/language_model/bert/uncased_L-12_H-768_A-12/vocab.txt \
+    --gpt2_ckpt_path /ihome/hdaqing/saz31/ts_2020/language_model/gpt2/models/117M/model.ckpt \
+    --models_dir /ihome/hdaqing/saz31/ts_2020/language_model/gpt2/models/ \
+    --model_name 117M \

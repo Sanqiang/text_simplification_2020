@@ -19,8 +19,9 @@ def result2txt(sents, lowercase=False, join_split=' '):
     return nsents
 
 
-def get_bleu_from_joshua(step, path_dst, path_ref, targets, resultdir, num_ref):
-    path_tar = resultdir + '/joshua_target_%s.txt' % step
+def get_bleu_from_joshua(step, path_dst, path_ref, targets, resultdir, num_ref,
+                         prefix=""):
+    path_tar = resultdir + '/%s_joshua_target_%s.txt' % (prefix, step)
     if not os.path.exists(path_tar):
         f = open(path_tar, 'w', encoding='utf-8')
         # joshua require lower case

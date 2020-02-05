@@ -34,3 +34,6 @@ srun python ../ts_model/run.py \
     --infer_src_file /zfs1/hdaqing/saz31/dataset/tmp_wikilarge_2048/dev/tune.8turkers.tok.norm.ori \
     --eval_batch_size 100 \
     --bert_vocab_file /ihome/hdaqing/saz31/ts_2020/language_model/bert/uncased_L-12_H-768_A-12/vocab.txt \
+    --gpt2_ckpt_path /ihome/hdaqing/saz31/ts_2020/language_model/gpt2/models/117M/model.ckpt \
+    --models_dir /ihome/hdaqing/saz31/ts_2020/language_model/gpt2/models/ \
+    --model_name 117M \

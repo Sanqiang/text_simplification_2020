@@ -203,8 +203,8 @@ corpus_sari_script = '/zfs1/hdaqing/saz31/dataset/ts_script/corpus_sari.sh'
 joshua_class = '/zfs1/hdaqing/saz31/dataset/ts_script/ppdb-simplification-release-joshua5.0/joshua/class'
 
 
-def get_sari_from_joshua(step, path_dst, path_ref, path_src, targets, resultdir, num_ref):
-    path_tar = resultdir + '/joshua_target_%s.txt' % step
+def get_sari_from_joshua(step, path_dst, path_ref, path_src, targets, resultdir, num_ref, prefix=""):
+    path_tar = resultdir + '/%s_joshua_target_%s.txt' % (prefix, step)
     if not os.path.exists(path_tar):
         f = open(path_tar, 'w', encoding='utf-8')
         # joshua require lower case

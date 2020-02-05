@@ -33,3 +33,5 @@ srun python ../ts_model/run.py \
     --eval_batch_size 64 \
     --models_dir /ihome/hdaqing/saz31/ts_2020/language_model/gpt2/models/ \
     --model_name 117M \
+    --gpt2_ckpt_path /ihome/hdaqing/saz31/ts_2020/language_model/gpt2/models/117M/model.ckpt \
+    --models_dir /ihome/hdaqing/saz31/ts_2020/language_model/gpt2/models/ \
